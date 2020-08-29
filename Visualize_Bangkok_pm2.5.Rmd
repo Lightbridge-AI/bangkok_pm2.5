@@ -1,0 +1,81 @@
+---
+title: "Visualize Bangkok air : pm2.5"
+output: html_notebook
+---
+[Inspired by prasertcbs](https://www.youtube.com/watch?v=-MiD-EWfdiI&list=PLoTScYm9O0GGat89RT9NMjW7sqFz84XSk&index=4&t=317s)  
+[Raw data here](http://berkeleyearth.lbl.gov/air-quality/maps/cities/Thailand/Bangkok)
+
+```{r setup , include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(lubridate)
+library(fpp2)
+library(ggridges)
+```
+
+## Overall Time Series 
+```{r}
+pm2_5_ts.monthly %>% 
+  autoplot(color="maroon") + 
+  geom_smooth(se=F) + xlab("year") + 
+  ylab("PM 2.5") +
+  labs(title = "Bangkok PM 2.5 : Time series" , caption = "data : berkeleyearth.org")
+```
+
+### Monthly Seasonal 
+```{r}
+pm2_5_ts.monthly %>%
+  ggseasonplot(year.labels = TRUE, year.labels.left = TRUE ) +
+  ylab("PM 2.5") +
+  labs(title = "Bangkok PM 2.5 : Seasonal plot time series" , caption = "data : berkeleyearth.org")
+```
+
+```{r}
+pm2_5_ts.monthly %>%
+    ggsubseriesplot(aes(color=Month)) + 
+    ylab("PM 2.5") + 
+    labs(title = "Bangkok PM 2.5 : Subseries plot" , caption = "data : berkeleyearth.org")
+```
+
+
+### Yearly Distribution
+```{r}
+pm2_5 %>%
+  mutate(year = as.factor(year(local_date_time))) %>%
+  ggplot(aes(pm2.5,year, fill = factor(stat(quantile)))) +
+  stat_density_ridges(
+    geom = "density_ridges_gradient", calc_ecdf = TRUE,
+    quantiles = 4, quantile_lines = TRUE
+  ) +
+  scale_fill_viridis_d(name = "Quartiles")
+```
+
+### Monthly distribution
+```{r}
+pm2_5 %>%
+  mutate(month = as.factor(month(local_date_time))) %>%
+  ggplot(aes(pm2.5,month)) +
+  geom_density_ridges(aes(fill = month),quantile_lines = TRUE, quantiles = 0.5) +
+  theme(legend.position = "none") +
+  labs(title = "Bangkok PM 2.5 : Monthly Distribution " , caption = "data : berkeleyearth.org")
+```
+```{r}
+pm2_5 %>%
+  mutate(month = as.factor(month(local_date_time))) %>%
+  ggboxplot(x = "month" , y = "pm2.5" , fill = "month")
+```
+
+
+
+### Hourly Distribution 
+```{r}
+pm2_5 %>% 
+  mutate(local_hour = as_factor(hour(local_date_time))) %>%
+  group_by(local_hour) %>%
+  ggplot(aes(local_hour,pm2.5,color = local_hour)) + 
+  geom_violin() + stat_summary(fun = mean) +
+  xlab("Hour") + 
+  ylab("PM 2.5") +
+  labs(title = "Bangkok PM 2.5 : 24 hours distribution " , caption = "data : berkeleyearth.org")
+```
+> Light Bridge : R-Studio 1.3.959 (mac)

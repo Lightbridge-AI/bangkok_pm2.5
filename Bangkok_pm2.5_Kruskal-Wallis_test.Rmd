@@ -1,0 +1,115 @@
+---
+title: "Monthly pm2.5 in Bangkok : Comparing means"
+output: html_notebook
+---
+
+[Inspired by prasertcbs](https://www.youtube.com/watch?v=-MiD-EWfdiI&list=PLoTScYm9O0GGat89RT9NMjW7sqFz84XSk&index=4&t=317s)  
+[Raw data here](http://berkeleyearth.lbl.gov/air-quality/maps/cities/Thailand/Bangkok)
+
+```{r setup , include=FALSE}
+knitr::opts_chunk$set(warning = FALSE)
+library(tidyverse)
+library(lubridate)
+library(fpp2)
+library(ggpubr)
+library(rstatix)
+```
+
+### From this plot
+```{r , echo=FALSE}
+pm2_5 %>%
+  mutate(month = as.factor(month(local_date_time))) %>%
+  ggplot(aes(pm2.5,month)) +
+  geom_density_ridges(aes(fill = month),quantile_lines = TRUE, quantiles = 0.5) +
+  theme(legend.position = "none") +
+  labs(title = "Bangkok PM 2.5 : Monthly Distribution " , caption = "data : berkeleyearth.org")
+```
+
+## Question : Does monthly seasonal variation in pm 2.5 exist ? 
+
+### Descriptive Stat
+```{r , echo=FALSE}
+pm2_5.monthly %>%
+  group_by(month) %>%
+  get_summary_stats(pm2.5 , type = "mean_sd")
+```
+
+## Step 1 : Distribution is Normal or not ? 
+We can check this in 2 ways : 1) Inspect QQ plot , 2) Perform Shapiro's test
+
+### 1) QQ plot
+```{r qq_plot }
+ggqqplot(pm2_5.monthly , "pm2.5", facet.by = "month")
+```
+
+Data not in standard error range , It looks like non-normal distribution 
+
+### 2) Shapiro's test 
+$H_0$ : Normal distribution in sample
+
+```{r shapiro_test}
+pm2_5.monthly %>%
+  group_by(month) %>%
+  shapiro_test(pm2.5) %>%
+  mutate(normal_dist = if_else(p > 0.05, "normal","non-normal" ))
+```
+**All non-normal distribution , comfirmed !! **   
+
+Thus, We have to use non-parametric alternative to the one-way ANOVA test,
+**Kruskal-Wallis Test.**
+
+# Kruskal-Wallis Test
+[Data Novia](https://www.datanovia.com/en/lessons/kruskal-wallis-test-in-r/)
+
+$$H_0 : \mu_1 = \mu_2 = \mu_3 = \ ...\  = \mu_{12}$$
+$$H_0 : \mu_1 \neq \mu_2 \neq \mu_3 \neq \ ...\  \neq \mu_{12}$$
+
+```{r }
+pm2_5.monthly %>% rstatix::kruskal_test(pm2.5 ~ month)
+```
+**P-value very close to 0 ?**
+
+**Use Base R instead !**
+```{r}
+kruskal.test(pm2.5 ~ month, pm2_5.monthly)
+```
+**P-value is significant. Thus,there are at least one difference in mean pm2.5 between months.**  
+**But, how much of the differences ? **
+
+### Kruskal effectsize calculation
+```{r}
+pm2_5.monthly %>% rstatix::kruskal_effsize(pm2.5 ~ month)
+```
+**Meaning : 44% of variation in mean pm2.5 can be predicted by month. This effect size is large !!**
+
+## Multiple pairwise-comparisons
+
+From the output of the Kruskal-Wallis test, we know that there is a significant difference between groups, but we don’t know which pairs of groups are different.
+
+### Dunn's test
+```{r}
+dunn_pm2_5.month <- pm2_5.monthly %>% 
+        rstatix::dunn_test(pm2.5 ~ month, p.adjust.method = "bonferroni")
+```
+```{r}
+dunn_pm2_5.month %>%
+  mutate(mean_diff = if_else(p.adj > 0.001, "Non-Significant","Significant" )) %>%
+  mutate(across(starts_with("g"),as_factor)) %>%
+  select(".y.",starts_with("group"),p.adj,mean_diff) %>%
+  arrange(desc(p.adj)) 
+
+```
+### Visualize significant Dunn's test
+```{r}
+dunn_pm2_5.month %>%
+  mutate(mean_diff = if_else(p.adj > 0.001, "Non-Significant","Significant" )) %>%
+  mutate(across(starts_with("g"),as_factor)) %>%
+  ggplot(aes(group1,group2,color = mean_diff, size = p.adj)) + 
+  geom_point() + scale_size(name = NULL , breaks = NULL) +
+  xlab("month") + ylab("month") + 
+  labs(title = "Dunn's test comparison between means of pm2.5", caption = "Significant at P-value < 0.001")
+```
+### Final Report
+* There was a statistically significant differences of pm2.5 mean value between months as assessed using the Kruskal-Wallis test (p < 0.001). Pairwise Dunn's test between months showed that all the difference between months was significant (Dunn’s test, p < 0.001) except for 7 pairs of months as indicated by red dot in above graph. 
+
+> Light Bridge : R-Studio 1.3.959 (mac)

@@ -1,0 +1,64 @@
+---
+title: "My Bangkok air pm2.5"
+output: html_notebook
+---
+[Inspired by](https://www.youtube.com/watch?v=-MiD-EWfdiI&list=PLoTScYm9O0GGat89RT9NMjW7sqFz84XSk&index=4&t=317s)
+[Data](http://berkeleyearth.lbl.gov/air-quality/maps/cities/Thailand/Bangkok)
+
+```{r setup , include=FALSE}
+knitr::opts_chunk$set()
+library(tidyverse)
+library(lubridate)
+library(fpp2)
+library(ggridges)
+library(ggpubr)
+```
+
+```{r read }
+pm2_5.raw <- read_tsv("http://berkeleyearth.lbl.gov/air-quality/maps/cities/Thailand/Bangkok/Bangkok.txt",
+                  comment = "%",
+                  col_names = c("year","month","day","hour","pm2.5")
+)
+```
+
+```{r clean ,cache=TRUE, dependson="read"}
+pm2_5 <- pm2_5.raw %>% mutate(date_time = make_datetime(year,month,day,hour),.before = pm2.5,
+                 local_date_time = date_time + hours(7), # Bangkok's local time
+                 .keep = "unused") %>% select(local_date_time:pm2.5)
+pm2_5
+```
+```{r}
+pm2_5 %>% tail()
+```
+
+
+## Create Time Series object
+
+## Hourly
+```{r ts_hourly }
+pm2_5_ts.hourly <- ts(pm2_5$local_date_time , start = c(2016,3),frequency = 8766) # 1yr = 8766 hr
+pm2_5_ts.hourly %>% head()
+```
+```{r}
+(8760*3 + 8784)/4 # number of Hour for avg 4 yrs (3 + 1 leap yrs) ; 2020 is a leap yrs
+```
+
+## Monthly & Yearly 
+```{r monthly}
+pm2_5.monthly <- pm2_5 %>%
+  mutate(year = as_factor(year(local_date_time)), 
+         month = as_factor(month(local_date_time)),.before = pm2.5) 
+   
+pm2_5.monthly
+```
+```{r ts_monthly }
+pm2_5_ts.monthly <- pm2_5.monthly$pm2.5 %>%
+    ts(start = c(2016,3), frequency = 12)
+pm2_5_ts.monthly 
+```
+
+> Light Bridge : R-Studio 1.3.959 (mac)
+
+
+
+
